@@ -33,6 +33,12 @@ from html.parser    import HTMLParser
 
 class SlideDisplay(HTMLParser):
 
+    def reset_lines(self):
+        self.lines = list()
+
+    def set_display_driver(self, text_widget):
+        self.text_field = text_widget
+
     def set_presenter_notes(self, boolean):
         self.show_notes = boolean
 
@@ -50,4 +56,5 @@ class SlideDisplay(HTMLParser):
         lines = data.split('\n')
         for line in lines:
             if line.startswith('%') == self.show_notes:
-                print(line)
+                self.lines.append(line)
+        self.text_field.set_text('\n'.join(self.lines))

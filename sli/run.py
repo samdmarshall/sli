@@ -85,8 +85,9 @@ class SlideProjector(object):
         else:
             return self.socket
 
-    def send_data(self, data):
-        raw_data = str.encode(data)
+    def send_data(self):
+        json_data = json.dumps({'slide':self.slide_index})
+        raw_data = str.encode(json_data)
         if not self.notes_mode:
             if self.connection is not None:
                 self.connection.send(raw_data)
@@ -99,16 +100,14 @@ class SlideProjector(object):
         should_advance = self.slide_index + 1 < len(self.slides)
         if should_advance:
             self.slide_index += 1
-            json_data = json.dumps({'slide':self.slide_index})
-            self.send_data(json_data)
+            self.send_data()
         return should_advance
 
     def prev_slide(self):
         should_backtrack = self.slide_index > 0
         if should_backtrack:
             self.slide_index -= 1
-            json_data = json.dumps({'slide':self.slide_index})
-            self.send_data(json_data)
+            self.send_data()
         return should_backtrack
 
     def update_slide(self, new_index=None):
@@ -117,21 +116,22 @@ class SlideProjector(object):
         if self.slide_display is None:
             return
         slide_contents = self.slides[new_index]
-        self.slide_display.set_text(slide_contents)
+        self.renderer.reset_lines()
+        self.renderer.feed(slide_contents)
         self.run_loop.draw_screen()
 
     def run(self):
-        start_slide_contents = self.slides[self.slide_index]
-        self.slide_display = urwid.Text(start_slide_contents)
+        self.slide_display = urwid.Text('')
+        self.renderer.set_display_driver(self.slide_display)
         def input_handler(keys, raw):
             first_key = keys[0]
             with Switch(first_key) as case:
-                if case('Q') or case('q'): self.exit()
+                if case('ctrl q'): self.exit()
                 if case('left'): self.prev_slide()
                 if case('right'): self.next_slide()
             self.update_slide()
-        self.widget = urwid.Filler(self.slide_display, 'top')
-        self.run_loop = urwid.MainLoop(self.widget, input_filter=input_handler)
+        display_widget = urwid.Filler(self.slide_display, 'top')
+        self.run_loop = urwid.MainLoop(display_widget, input_filter=input_handler)
         self.run_loop.run()
 
     def exit(self):
