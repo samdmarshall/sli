@@ -68,13 +68,17 @@ def run_notes(projector):
         projector.update_slide()
 
 class SlideProjector(object):
-    def __init__(self, slide_deck, presenter_mode, slide_start_index):
+    def __init__(self, slide_deck, presenter_mode, slide_start_index):    
         self.slides = slide_deck.slides
+        slide_start_index = max(0,slide_start_index)
+        last_slide_index = len(self.slides) - 1
+        slide_start_index = min(last_slide_index, slide_start_index)
         self.slide_index = slide_start_index
         self.renderer = SlideDisplay()
         self.notes_mode = presenter_mode
         self.slide_display = None
         self.connection = None
+        self.socket = None
         if not self.notes_mode:
             _thread.start_new_thread(run_slides, (self,))
         else:
@@ -83,10 +87,12 @@ class SlideProjector(object):
     def send_data(self, data):
         raw_data = str.encode(data)
         if not self.notes_mode:
-            self.connection.send(raw_data)
+            if self.connection is not None:
+                self.connection.send(raw_data)
         else:
-            try: self.socket.send(raw_data)
-            except: pass
+            if self.socket is not None:
+                try: self.socket.send(raw_data)
+                except: pass
 
     def next_slide(self):
         should_advance = self.slide_index + 1 < len(self.slides)
@@ -125,6 +131,6 @@ class SlideProjector(object):
 
     def exit(self):
         urwid.ExitMainLoop()
-        if not self.notes_mode:
+        if not self.notes_mode and self.connection is not None:
             self.connection.close()
         sys.exit(0)
