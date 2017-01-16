@@ -37,6 +37,14 @@ import _thread
 from switch             import Switch
 from .render            import SlideDisplay
 
+def read_stream(projector):
+    while True:
+        data = projector.get_stream().recv(1024)
+        if not data:
+            break
+        json_data = json.loads(data)
+        projector.update_slide(json_data['slide'])
+
 def run_slides(projector):
     projector.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
@@ -46,26 +54,12 @@ def run_slides(projector):
     projector.socket.bind('/tmp/sli-socket')
     projector.socket.listen(1)
     projector.connection, addr = projector.socket.accept()
-    while True:
-        data = projector.connection.recv(1024)
-        if not data:
-            break
-        json_data = json.loads(data)
-        print(json_data)
-        projector.slide_index = json_data['slide']
-        projector.update_slide()
+    read_stream(projector)
 
 def run_notes(projector):
     projector.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     projector.socket.connect('/tmp/sli-socket')
-    while True:
-        data = projector.socket.recv(1024)
-        if not data:
-            break
-        json_data = json.loads(data)
-        print(json_data)
-        projector.slide_index = json_data['slide']
-        projector.update_slide()
+    read_stream(projector)
 
 class SlideProjector(object):
     def __init__(self, slide_deck, presenter_mode, slide_start_index):    
@@ -75,6 +69,7 @@ class SlideProjector(object):
         slide_start_index = min(last_slide_index, slide_start_index)
         self.slide_index = slide_start_index
         self.renderer = SlideDisplay()
+        self.renderer.set_presenter_notes(presenter_mode)
         self.notes_mode = presenter_mode
         self.slide_display = None
         self.connection = None
@@ -83,6 +78,12 @@ class SlideProjector(object):
             _thread.start_new_thread(run_slides, (self,))
         else:
             _thread.start_new_thread(run_notes, (self,))
+
+    def get_stream(self):
+        if not self.notes_mode:
+            return self.connection
+        else:
+            return self.socket
 
     def send_data(self, data):
         raw_data = str.encode(data)
@@ -110,24 +111,28 @@ class SlideProjector(object):
             self.send_data(json_data)
         return should_backtrack
 
-    def update_slide(self):
+    def update_slide(self, new_index=None):
+        if new_index is None:
+            new_index = self.slide_index
         if self.slide_display is None:
             return
-        self.slide_display.set_text("%d" % self.slide_index)
+        slide_contents = self.slides[new_index]
+        self.slide_display.set_text(slide_contents)
+        self.run_loop.draw_screen()
 
     def run(self):
-        self.slide_display = urwid.Text('')
+        start_slide_contents = self.slides[self.slide_index]
+        self.slide_display = urwid.Text(start_slide_contents)
         def input_handler(keys, raw):
             first_key = keys[0]
             with Switch(first_key) as case:
                 if case('Q') or case('q'): self.exit()
                 if case('left'): self.prev_slide()
                 if case('right'): self.next_slide()
-            # self.renderer.feed(self.slides[self.slide_index])
             self.update_slide()
-        fill = urwid.Filler(self.slide_display, 'top')
-        loop = urwid.MainLoop(fill, input_filter=input_handler)
-        loop.run()
+        self.widget = urwid.Filler(self.slide_display, 'top')
+        self.run_loop = urwid.MainLoop(self.widget, input_filter=input_handler)
+        self.run_loop.run()
 
     def exit(self):
         urwid.ExitMainLoop()

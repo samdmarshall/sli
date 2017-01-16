@@ -1,2 +1,2 @@
 remote_origin = 'git@github.com:samdmarshall/sli.git'
-commit_hash = '4d97f00'
+commit_hash = '228428c'

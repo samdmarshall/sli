@@ -33,6 +33,9 @@ from html.parser    import HTMLParser
 
 class SlideDisplay(HTMLParser):
 
+    def set_presenter_notes(self, boolean):
+        self.show_notes = boolean
+
     def handle_starttag(self, tag, attrs):
         with Switch(tag) as case:
             pass
@@ -46,5 +49,5 @@ class SlideDisplay(HTMLParser):
     def handle_data(self, data):
         lines = data.split('\n')
         for line in lines:
-            if not line.startswith('%'):
+            if line.startswith('%') == self.show_notes:
                 print(line)
