@@ -68,9 +68,9 @@ def run_notes(projector):
         projector.update_slide()
 
 class SlideProjector(object):
-    def __init__(self, slide_deck, presenter_mode):
+    def __init__(self, slide_deck, presenter_mode, slide_start_index):
         self.slides = slide_deck.slides
-        self.slide_index = 0
+        self.slide_index = slide_start_index
         self.renderer = SlideDisplay()
         self.notes_mode = presenter_mode
         self.slide_display = None

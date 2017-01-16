@@ -52,12 +52,19 @@ def main():
         help='Connect to already running presentation session',
         action='store_true',
     )
+    parser.add_argument(
+        '--slide',
+        help='Specify the slide number to start on',
+        type=int,
+        default=0,
+        action='store',
+    )
 
     args = parser.parse_args(sys.argv[1:])
 
     presentation_deck = SlideReel(args.presentation)
-    presentation = SlideProjector(presentation_deck, args.presenter_mode)
+    presentation = SlideProjector(presentation_deck, args.presenter_mode, args.slide)
     presentation.run()
 
-if __name__ == '__main':
+if __name__ == '__main__':
     main()
