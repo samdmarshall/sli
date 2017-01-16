@@ -32,25 +32,15 @@ from switch         import Switch
 from html.parser    import HTMLParser
 
 class SlideDisplay(HTMLParser):
-    def set_terminal(self, terminal):
-        self.term = terminal
 
     def handle_starttag(self, tag, attrs):
         with Switch(tag) as case:
-            if case('code'):
-                if self.last_start_tag == 'pre':
-                    print(self.term.white_on_black)
-            if case('h1'):
-                print(self.term.underline)
+            pass
         self.last_start_tag = tag
 
     def handle_endtag(self, tag):
         with Switch(tag) as case:
-            if case('h1'):
-                print(self.term.normal)
-            if case('pre'):
-                if self.last_end_tag == 'code':
-                    print(self.term.normal)
+            pass
         self.last_end_tag = tag
 
     def handle_data(self, data):

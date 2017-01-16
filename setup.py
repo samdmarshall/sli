@@ -48,6 +48,6 @@ setup(
     install_requires = [
         'Markdown>=2.6.7',
         'switch>=1.1.0',
-        'blessings>=1.6',
+        'urwid>=1.3.1',
     ]
 )

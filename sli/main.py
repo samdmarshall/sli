@@ -47,11 +47,16 @@ def main():
         metavar='<path to presentation>',
         action='store',
     )
+    parser.add_argument(
+        '--presenter-mode',
+        help='Connect to already running presentation session',
+        action='store_true',
+    )
 
     args = parser.parse_args(sys.argv[1:])
 
     presentation_deck = SlideReel(args.presentation)
-    presentation = SlideProjector(presentation_deck)
+    presentation = SlideProjector(presentation_deck, args.presenter_mode)
     presentation.run()
 
 if __name__ == '__main':

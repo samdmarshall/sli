@@ -28,89 +28,103 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 # OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import os
 import sys
-import tty
-import curses
-import string
-import termios
-import blessings
+import json
+import urwid
+import socket
+import _thread
 from switch             import Switch
 from .render            import SlideDisplay
 
-BINDABLES = string.ascii_letters + string.digits + string.whitespace
+def run_slides(projector):
+    projector.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        os.remove('/tmp/sli-socket')
+    except OSError:
+        pass
+    projector.socket.bind('/tmp/sli-socket')
+    projector.socket.listen(1)
+    projector.connection, addr = projector.socket.accept()
+    while True:
+        data = projector.connection.recv(1024)
+        if not data:
+            break
+        json_data = json.loads(data)
+        print(json_data)
+        projector.slide_index = json_data['slide']
+        projector.update_slide()
 
-class _Getch:
-    def __call__(self):
-            fd = sys.stdin.fileno()
-            old_settings = termios.tcgetattr(fd)
-            try:
-                tty.setraw(sys.stdin.fileno())
-                ch = sys.stdin.read(1)
-                if ch not in BINDABLES:
-                    ch += sys.stdin.read(2)
-            finally:
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            return ch
+def run_notes(projector):
+    projector.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    projector.socket.connect('/tmp/sli-socket')
+    while True:
+        data = projector.socket.recv(1024)
+        if not data:
+            break
+        json_data = json.loads(data)
+        print(json_data)
+        projector.slide_index = json_data['slide']
+        projector.update_slide()
 
 class SlideProjector(object):
-    def __init__(self, slide_deck):
+    def __init__(self, slide_deck, presenter_mode):
         self.slides = slide_deck.slides
-        self.input = _Getch()
         self.slide_index = 0
-        self.term = blessings.Terminal()
         self.renderer = SlideDisplay()
-        self.renderer.set_terminal(self.term)
-        self.term.enter_fullscreen()
-        self.term.stream.write(self.term.hide_cursor)
+        self.notes_mode = presenter_mode
+        self.slide_display = None
+        self.connection = None
+        if not self.notes_mode:
+            _thread.start_new_thread(run_slides, (self,))
+        else:
+            _thread.start_new_thread(run_notes, (self,))
 
-    def flash(self):
-        print('\a')
-        print(self.term.move(0,0))
+    def send_data(self, data):
+        raw_data = str.encode(data)
+        if not self.notes_mode:
+            self.connection.send(raw_data)
+        else:
+            try: self.socket.send(raw_data)
+            except: pass
 
-    def next(self):
-        new_slide = False
-        if self.slide_index + 1 < len(self.slides):
+    def next_slide(self):
+        should_advance = self.slide_index + 1 < len(self.slides)
+        if should_advance:
             self.slide_index += 1
-            new_slide = True
-        else:
-            self.flash()
-        return new_slide
+            json_data = json.dumps({'slide':self.slide_index})
+            self.send_data(json_data)
+        return should_advance
 
-    def back(self):
-        new_slide = False
-        if self.slide_index > 0:
+    def prev_slide(self):
+        should_backtrack = self.slide_index > 0
+        if should_backtrack:
             self.slide_index -= 1
-            new_slide = True
-        else:
-            self.flash()
-        return new_slide
+            json_data = json.dumps({'slide':self.slide_index})
+            self.send_data(json_data)
+        return should_backtrack
 
-    def separator(self):
-        separator_bar = '=' * (self.term.width - 2)
-        separator_string = '@'+separator_bar+'@'
-        return separator_string
-        
+    def update_slide(self):
+        if self.slide_display is None:
+            return
+        self.slide_display.set_text("%d" % self.slide_index)
+
     def run(self):
-        new_slide = True
-        should_run = True
-        while should_run:
-            if new_slide:
-                new_slide = False
-                print(self.term.clear())
-                print(self.separator())
-                print(self.term.clear())
-                self.term.move(0,0)
-                self.renderer.feed(self.slides[self.slide_index])
-            key = self.input()
-            with Switch(key) as case:
-                if case('\x1b[D'):
-                    new_slide = self.back()
-                if case('\x1b[C'):
-                    new_slide = self.next()
-                if case('q'):
-                    self.exit()
+        self.slide_display = urwid.Text('')
+        def input_handler(keys, raw):
+            first_key = keys[0]
+            with Switch(first_key) as case:
+                if case('Q') or case('q'): self.exit()
+                if case('left'): self.prev_slide()
+                if case('right'): self.next_slide()
+            # self.renderer.feed(self.slides[self.slide_index])
+            self.update_slide()
+        fill = urwid.Filler(self.slide_display, 'top')
+        loop = urwid.MainLoop(fill, input_filter=input_handler)
+        loop.run()
 
     def exit(self):
-        self.term.stream.write(self.term.normal_cursor)
-        self.term.exit_fullscreen()
+        urwid.ExitMainLoop()
+        if not self.notes_mode:
+            self.connection.close()
         sys.exit(0)
