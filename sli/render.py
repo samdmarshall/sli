@@ -28,31 +28,33 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 # OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-import argparse
-from .version           import __version__ as SLI_VERSION
-from .reel              import SlideReel
-from .run               import SlideProjector
+from switch         import Switch
+from html.parser    import HTMLParser
 
-def main():
-    parser = argparse.ArgumentParser(description='command line markdown presenter')
-    parser.add_argument(
-        '--version',
-        help='Displays the version information',
-        action='version',
-        version=SLI_VERSION,
-    )
-    parser.add_argument(
-        'presentation',
-        metavar='<path to presentation>',
-        action='store',
-    )
+class SlideDisplay(HTMLParser):
+    def set_terminal(self, terminal):
+        self.term = terminal
 
-    args = parser.parse_args(sys.argv[1:])
+    def handle_starttag(self, tag, attrs):
+        with Switch(tag) as case:
+            if case('code'):
+                if self.last_start_tag == 'pre':
+                    print(self.term.white_on_black)
+            if case('h1'):
+                print(self.term.underline)
+        self.last_start_tag = tag
 
-    presentation_deck = SlideReel(args.presentation)
-    presentation = SlideProjector(presentation_deck)
-    presentation.run()
+    def handle_endtag(self, tag):
+        with Switch(tag) as case:
+            if case('h1'):
+                print(self.term.normal)
+            if case('pre'):
+                if self.last_end_tag == 'code':
+                    print(self.term.normal)
+        self.last_end_tag = tag
 
-if __name__ == '__main':
-    main()
+    def handle_data(self, data):
+        lines = data.split('\n')
+        for line in lines:
+            if not line.startswith('%'):
+                print(line)

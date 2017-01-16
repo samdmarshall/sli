@@ -28,31 +28,26 @@
 # OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 # OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import sys
-import argparse
-from .version           import __version__ as SLI_VERSION
-from .reel              import SlideReel
-from .run               import SlideProjector
+import os
+import re
+import markdown
 
-def main():
-    parser = argparse.ArgumentParser(description='command line markdown presenter')
-    parser.add_argument(
-        '--version',
-        help='Displays the version information',
-        action='version',
-        version=SLI_VERSION,
-    )
-    parser.add_argument(
-        'presentation',
-        metavar='<path to presentation>',
-        action='store',
-    )
+class SlideReel(object):
+    def __init__(self, file_path):
+        self.pres_path = os.path.expanduser(file_path)
+        self.current_index = 0
+        self.slides = list()
+        
+        if not os.path.exists(self.pres_path): return
 
-    args = parser.parse_args(sys.argv[1:])
+        fd = open(self.pres_path, 'r')
+        data = fd.read()
+        fd.close()
 
-    presentation_deck = SlideReel(args.presentation)
-    presentation = SlideProjector(presentation_deck)
-    presentation.run()
+        results = re.finditer(r'\n(\-|\*){3,}', data)
+        data_index = 0
+        for item in results:
+            page_text = data[data_index:item.start(0)]
+            data_index = item.end(0)
+            self.slides.append(markdown.markdown(page_text))
 
-if __name__ == '__main':
-    main()
