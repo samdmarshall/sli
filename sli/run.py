@@ -31,9 +31,9 @@
 import os
 import sys
 import json
-import urwid
 import socket
 import _thread
+import urwid
 from switch             import Switch
 from .render            import SlideDisplay
 
@@ -53,7 +53,7 @@ def run_slides(projector):
         pass
     projector.socket.bind('/tmp/sli-socket')
     projector.socket.listen(1)
-    projector.connection, addr = projector.socket.accept()
+    projector.connection, _ = projector.socket.accept()
     read_stream(projector)
 
 def run_notes(projector):
@@ -62,9 +62,9 @@ def run_notes(projector):
     read_stream(projector)
 
 class SlideProjector(object):
-    def __init__(self, slide_deck, presenter_mode, slide_start_index):    
+    def __init__(self, slide_deck, presenter_mode, slide_start_index):
         self.slides = slide_deck.slides
-        slide_start_index = max(0,slide_start_index)
+        slide_start_index = max(0, slide_start_index)
         last_slide_index = len(self.slides) - 1
         slide_start_index = min(last_slide_index, slide_start_index)
         self.slide_index = slide_start_index
@@ -74,6 +74,7 @@ class SlideProjector(object):
         self.slide_display = None
         self.connection = None
         self.socket = None
+        self.started_presentation = False
         if not self.notes_mode:
             _thread.start_new_thread(run_slides, (self,))
         else:
@@ -93,22 +94,28 @@ class SlideProjector(object):
                 self.connection.send(raw_data)
         else:
             if self.socket is not None:
-                try: self.socket.send(raw_data)
-                except: pass
+                try:
+                    self.socket.send(raw_data)
+                except:
+                    pass
 
     def next_slide(self):
-        should_advance = self.slide_index + 1 < len(self.slides)
-        if should_advance:
-            self.slide_index += 1
-            self.send_data()
-        return should_advance
+        if self.started_presentation is True:
+            should_advance = self.slide_index + 1 < len(self.slides)
+            if should_advance:
+                self.slide_index += 1
+                self.send_data()
+            return should_advance
+        return False
 
     def prev_slide(self):
-        should_backtrack = self.slide_index > 0
-        if should_backtrack:
-            self.slide_index -= 1
-            self.send_data()
-        return should_backtrack
+        if self.started_presentation is True:
+            should_backtrack = self.slide_index > 0
+            if should_backtrack:
+                self.slide_index -= 1
+                self.send_data()
+            return should_backtrack
+        return False
 
     def update_slide(self, new_index=None):
         if new_index is None:
@@ -126,16 +133,22 @@ class SlideProjector(object):
         def input_handler(keys, raw):
             first_key = keys[0]
             with Switch(first_key) as case:
-                if case('ctrl q'): self.exit()
-                if case('left'): self.prev_slide()
-                if case('right'): self.next_slide()
+                if case('ctrl q'):
+                    self.exit()
+                if case('left'):
+                    self.prev_slide()
+                if case('right'):
+                    self.next_slide()
+            if self.started_presentation is False:
+                self.started_presentation = True
             self.update_slide()
         display_widget = urwid.Filler(self.slide_display, 'top')
         self.run_loop = urwid.MainLoop(display_widget, input_filter=input_handler)
         self.run_loop.run()
 
     def exit(self):
-        urwid.ExitMainLoop()
-        if not self.notes_mode and self.connection is not None:
-            self.connection.close()
-        sys.exit(0)
+        if self.started_presentation is True:
+            urwid.ExitMainLoop()
+            if not self.notes_mode and self.connection is not None:
+                self.connection.close()
+            sys.exit(0)

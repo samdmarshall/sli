@@ -37,7 +37,7 @@ class SlideReel(object):
         self.pres_path = os.path.expanduser(file_path)
         self.current_index = 0
         self.slides = list()
-        
+
         if not os.path.exists(self.pres_path): return
 
         fd = open(self.pres_path, 'r')
@@ -50,4 +50,3 @@ class SlideReel(object):
             page_text = data[data_index:item.start(0)]
             data_index = item.end(0)
             self.slides.append(markdown.markdown(page_text))
-
