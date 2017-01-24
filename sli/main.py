@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+#
 # Copyright (c) 2017, Samantha Marshall (http://pewpewthespells.com)
 # All rights reserved.
 #
@@ -30,9 +32,12 @@
 
 import sys
 import argparse
+from switch             import Switch
 from .version           import __version__ as SLI_VERSION
 from .reel              import SlideReel
-from .run               import SlideProjector
+from .                  import term
+from .ui                import SizingDisplay, PresentationDisplay, SpeakerNotesDisplay
+from .Logger            import Logger
 
 def main():
     parser = argparse.ArgumentParser(description='command line markdown presenter')
@@ -43,28 +48,101 @@ def main():
         version=SLI_VERSION,
     )
     parser.add_argument(
+        '--quiet',
+        help='Silences all logging output',
+        default=False,
+        action='store_true'
+    )
+    parser.add_argument(
+        '--verbose',
+        help='Adds verbosity to logging output',
+        default=False,
+        action='store_true'
+    )
+    parser.add_argument(
+        '--no-ansi',
+        help='Disables the ANSI color codes as part of the logger',
+        default=False,
+        action='store_true'
+    )
+    parser.add_argument(
+        '--debug',
+        help=argparse.SUPPRESS,
+        default=False,
+        action='store_true'
+    )
+
+    if term.uses_suitable_locale() is False:
+        Logger.write().error('Unable to initialize in this terminal, please uses a UTF-8 locale!')
+        parser.exit(1, '')
+
+    subparsers = parser.add_subparsers(title='Subcommands', dest='command')
+    subparsers.required = True
+
+    # Subcommand for running in presentation mode
+    ##
+    presentation_parser = subparsers.add_parser(
+        'present',
+        help='run sli in presentation mode',
+    )
+    presentation_parser.add_argument(
         'presentation',
         metavar='<path to presentation>',
         action='store',
     )
-    parser.add_argument(
-        '--presenter-mode',
-        help='Connect to already running presentation session',
-        action='store_true',
-    )
-    parser.add_argument(
+    presentation_parser.add_argument(
         '--slide',
         help='Specify the slide number to start on',
-        type=int,
-        default=0,
         action='store',
+        type=int,
+        default=0
     )
 
-    args = parser.parse_args(sys.argv[1:])
+    # Subcommand for running in "speaker notes" mode
+    ##
+    speaker_notes_parser = subparsers.add_parser(
+        'notes',
+        help='run sli in speaker notes mode',
+    )
+    speaker_notes_parser.add_argument(
+        'presentation',
+        metavar='<path to presentation>',
+        action='store',
+    )
+    speaker_notes_parser.add_argument(
+        '--slide',
+        help='Specify the slide number to start on',
+        action='store',
+        type=int,
+        default=0
+    )
 
-    presentation_deck = SlideReel(args.presentation)
-    presentation = SlideProjector(presentation_deck, args.presenter_mode, args.slide)
-    presentation.run()
+    # Subcommand for running in "sizing" mode
+    ##
+    sizing_parser = subparsers.add_parser(
+        'size',
+        help='run sli in a debug mode to help size it correctly for display',
+    )
+
+    args = parser.parse_args()
+
+    Logger.disableANSI(args.no_ansi)
+    Logger.enableDebugLogger(args.debug)
+    Logger.isVerbose(args.verbose)
+    Logger.isSilent(args.quiet)
+
+    with Switch(args.command) as case:
+        if case('present'):
+            slide_deck = SlideReel(args.presentation)
+            presentation = PresentationDisplay(slide_deck, args.slide)
+            presentation.run()
+        if case('notes'):
+            slide_deck = SlideReel(args.presentation)
+            presentation = SpeakerNotesDisplay(slide_deck, args.slide)
+            presentation.run()
+        if case('size'):
+            sizing_display = SizingDisplay()
+            sizing_display.run()
 
 if __name__ == '__main__':
     main()
