@@ -47,6 +47,8 @@ class BaseDisplay(object):
     def run(self):
         def input_handler(keys, raw):
             with Switch(keys[0]) as case:
+                if case('space'):
+                    self.__delegate.update()
                 if case('ctrl q'):
                     self.exit()
                 if keys[0] in self.__delegate.getInput().keys():
